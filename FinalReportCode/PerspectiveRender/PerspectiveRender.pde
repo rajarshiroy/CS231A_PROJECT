@@ -1,3 +1,10 @@
+////////////////////////////////////////////////////////////////////////
+// Performs realtime 3D marker tracking of retro-reflective markers
+// on user's eyewear using Leap Motion controller stereo camera stream.
+// Renders basic wireframe of a room using projection based on user's
+// eye position.
+////////////////////////////////////////////////////////////////////////
+
 import processing.video.*;
 import de.voidplus.leapmotion.*;
 import gab.opencv.*;
@@ -23,10 +30,6 @@ PImage srcLeft, srcRight;
 
 // Blob detector
 FeatureDetector blobDetector;
-// Surf feature extractor
-DescriptorExtractor surfExtractor;
-// Surf feature matcher for correspondence
-DescriptorMatcher surfMatcher;
 
 
 // Rectified image plane marker position
@@ -44,13 +47,10 @@ LinkedList<PVector> rightMarkerPosQueue;
 PVector leftMarkerPosAvg = new PVector(0,0,0);
 PVector rightMarkerPosAvg = new PVector(0,0,0);
 
-//
-PImage gridtex = loadImage("/Users/rajarshiroy/Desktop/CS231a/Project/implementation/grid_tex.jpg");
-
 
 void setup() {
-  size(1400, 900, P3D);
-  //size(1440, 900, P3D);
+  //size(1400, 900, P3D);
+  size(1440, 900, P3D);
   background(0);
   leap = new LeapMotion(this);
   leftcvUnstretched = new OpenCV(this, 640, 240);
@@ -67,10 +67,7 @@ void setup() {
   rightMarkerPosQueue.add(new PVector(0,0,0));
   
   blobDetector = FeatureDetector.create(FeatureDetector.SIMPLEBLOB);
-  surfExtractor = DescriptorExtractor.create(DescriptorExtractor.SURF);
-  surfMatcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_L1);
   blobDetector.read("/Users/rajarshiroy/Desktop/CS231a/Project/implementation/simpleblob_custom_params.yml");
-  surfExtractor.read("/Users/rajarshiroy/Desktop/CS231a/Project/implementation/surf_custom_params.yml");
   smooth();
   
 }
@@ -80,12 +77,8 @@ void draw() {
     leapInit = true;
     for (Image camera : leap.getImages()) {
       if (camera.isLeft()) {
-        // Left camera
-        //image(camera, 0, 0);
         leftCam = camera;
       } else {
-        // Right camera
-        //image(camera, 0, camera.getHeight());
         rightCam = camera;
       }
     }
@@ -121,7 +114,6 @@ void draw() {
   MatOfKeyPoint blobMatRight = new MatOfKeyPoint();
   blobDetector.detect(rightImage, blobMatRight);
   List<KeyPoint> blobsRight = blobMatRight.toList();
-  //System.out.println("Detected " + blobs.size()+ " blobs in the image");
 
 
 
@@ -178,7 +170,6 @@ void draw() {
      }
   }
   
-  //System.out.println("triEpiFiltsize: " + triEpiFilt.size());
   
   // Further filtering if excess markers detected
   if(triEpiFilt.size()==0) {
@@ -234,22 +225,19 @@ void draw() {
   }  
   leftMarkerPosAvg.div(leftMarkerPosQueue.size());
   rightMarkerPosAvg.div(rightMarkerPosQueue.size());
-  
 
-
-  
-  
   background(0);
   
-  
+  /*
   // ========== DRAW INFORMATION START==========
+
   // Draw the camera images
   srcLeft.resize(320, 240);
   srcRight.resize(320, 240);
   image(srcLeft, 0, 0);
   image(srcRight, 320, 0);
  
-  // Draw unrectified blobs
+  // Draw unrectified blobs on top of raw images
   fill(255, 200, 0);
   if(blobsLeft.size()>0) {
     for (int i=0; i<blobsLeft.size(); i++) {
@@ -265,123 +253,63 @@ void draw() {
     } 
   }
   
-
-  
-  
   // Draw all rectified blobs together (orange left, yellow right)
+  // Also draw epipolar constraint triangle
   stroke(150);
   for (PVector blobslope : leftSlopesEpifilt) {
     fill(0, 0, 0);
     rect(blobslope.x*80+160, blobslope.y*80+360-2, 16, 4);
     fill(255, 200, 0);
     ellipse(blobslope.x*80+160, blobslope.y*80+360, 5, 5);
-    
-    //System.out.println("X: " + blobslope.x+ "Y: " + blobslope.y);
   }
   
   for (PVector blobslope : rightSlopesEpifilt) {
     fill(255, 100, 0);
     ellipse(blobslope.x*80+160, blobslope.y*80+360, 5, 5);
-    //System.out.println("X: " + blobslope.x+ "Y: " + blobslope.y);
   }
   
-  
-  // Draw rectified markers together
-  fill(100, 250, 0);
-  ellipse(leftCamLeftMarker.x*80+480, leftCamLeftMarker.y*80+360, 5, 5);
-  ellipse(rightCamLeftMarker.x*80+480, rightCamLeftMarker.y*80+360, 5, 5);
-  fill(100, 0, 250);  
-  ellipse(leftCamRightMarker.x*80+480, leftCamRightMarker.y*80+360, 5, 5);
-  ellipse(rightCamRightMarker.x*80+480, rightCamRightMarker.y*80+360, 5, 5);
-  
-  // Draw a box
   pushMatrix();
   fill(100, 100, 100);
   stroke(50);
   translate(width/2, height/2, 0);
-  scale(0.5);
+  scale(0.75);
+    // Draw Leap Motion Controller
     box(40, 20, 10);
-
+    // Draw Monitor
     pushMatrix();
     translate(0, 98, 0);
     box(290, 175, 2);
     popMatrix();
-    
+    // Draw Left Marker
     pushMatrix();
     translate(leftMarkerPos.x, leftMarkerPos.y, leftMarkerPos.z);
     fill(200, 250, 0);
     sphere(20);
     popMatrix();
-  
+    // Draw Right Marker
     pushMatrix();
     translate(rightMarkerPos.x, rightMarkerPos.y, rightMarkerPos.z);
     fill(200, 0, 250);
     sphere(20);
     popMatrix();
-    
-  
-  
   popMatrix();
-
-  // Draw framerate
-  fill(0);
-  noStroke();
-  rect(0, 0, 110, 30);
-  fill(255);
-  //text("Frame rate: " + nf(round(frameRate), 2), 10, 20, 0);
   // ========== DRAW INFORMATION END==========
-
+*/
   
   leftImage.release();
   rightImage.release();
   
-  //drawRoom();
-  //drawFancyRoom();
-  
+  drawRoom();
+  //drawRoomRed();
+  //drawRoomBlue();
 }
  
 
 void drawRoom(){
-  //Width: 1440 2D res corresponds to 290
-  //Height: 900 2D res corresponds to 175
-  //~130 in leap 3D coord corresponds to 140mm in reality
-  
-  // Camera position in pixel coords 
-  float camx = (leftMarkerPos.x+rightMarkerPos.x)/2*5.385+720;
-  float camy = (leftMarkerPos.y+rightMarkerPos.y)/2*5.385+490;
-  float camz = (leftMarkerPos.z+rightMarkerPos.z)/2*5.385;
-  
-  // Far wall distance in pixel coords
-  float d = 2000;
-  
-  float xAC = camx*d/camz;
-  float xBD = 1440-((1440-camx)*d/camz);
-  float yAB = camy*d/camz;
-  float yCD = 900-((900-camy)*d/camz);
-  
-  stroke(255);
-  strokeWeight(4);
-  // Line CD
-  line(xAC, yCD, 0, xBD, yCD, 0);
-  // Line AC
-  line(xAC, yAB, 0, xAC, yCD, 0);
-  // Line BD
-  line(xBD, yAB, 0, xBD, yCD, 0);
-  // Line AB
-  line(xAC, yAB, 0, xBD, yAB, 0);
-  
-  // Line Aa
-  line(xAC, yAB, 0, 0, 0, 0);
-  // Line Bb
-  line(xBD, yAB, 0, 1440, 0, 0);
-  // Line Cc
-  line(xAC, yCD, 0, 0, 900, 0);
-  // Line Dd
-  line(xBD, yCD, 0, 1440, 900, 0);
-  
-}
-
-void drawFancyRoom(){
+  //Far wall:
+  //A--B
+  //|  |
+  //C--D
   //Width: 1440 2D res corresponds to 290
   //Height: 900 2D res corresponds to 175
   //~130 in leap 3D coord corresponds to 140mm in reality
@@ -394,19 +322,10 @@ void drawFancyRoom(){
   // Far wall distance in pixel coords
   float d = 2000;
   
-  float xAC = camx*d/camz;
-  float xBD = 1440-((1440-camx)*d/camz);
-  float yAB = camy*d/camz;
-  float yCD = 900-((900-camy)*d/camz);
-  
-  // Ceiling
-  beginShape();
-  texture(gridtex);
-  vertex(0, 0, 0, 0); //a
-  vertex(1400, 0, 350, 0); //b
-  vertex(1400, 500, 350, 350); //B  xBD, yAB,
-  vertex(0, 900, 0, 350); //A  xAC, yAB,
-  endShape();
+  float xAC = camx*d/(camz+d);
+  float xBD = 1440-((1440-camx)*d/(camz+d));
+  float yAB = camy*d/(camz+d);
+  float yCD = 900-((900-camy)*d/(camz+d));
   
   stroke(255);
   strokeWeight(4);
@@ -427,13 +346,100 @@ void drawFancyRoom(){
   line(xAC, yCD, 0, 0, 900, 0);
   // Line Dd
   line(xBD, yCD, 0, 1440, 900, 0);
+}
+
+// If red filter over left eye
+void drawRoomRed(){
+  //Far wall:
+  //A--B
+  //|  |
+  //C--D
+  //Width: 1440 2D res corresponds to 290
+  //Height: 900 2D res corresponds to 175
+  //~130 in leap 3D coord corresponds to 140mm in reality
   
+  // Camera position in pixel coords 
+  float camx = (0.7*leftMarkerPosAvg.x+0.3*rightMarkerPosAvg.x)*5.385+720;
+  float camy = (0.7*leftMarkerPosAvg.y+0.3*rightMarkerPosAvg.y)*5.385+490;
+  float camz = (0.7*leftMarkerPosAvg.z+0.3*rightMarkerPosAvg.z)*5.385;
+  
+  // Far wall distance in pixel coords
+  float d = 2000;
+  
+  float xAC = camx*d/(camz+d);
+  float xBD = 1440-((1440-camx)*d/(camz+d));
+  float yAB = camy*d/(camz+d);
+  float yCD = 900-((900-camy)*d/(camz+d));
+  
+  stroke(255,0,0);
+  strokeWeight(4);
+  // Line CD
+  line(xAC, yCD, 0, xBD, yCD, 0);
+  // Line AC
+  line(xAC, yAB, 0, xAC, yCD, 0);
+  // Line BD
+  line(xBD, yAB, 0, xBD, yCD, 0);
+  // Line AB
+  line(xAC, yAB, 0, xBD, yAB, 0);
+  
+  // Line Aa
+  line(xAC, yAB, 0, 0, 0, 0);
+  // Line Bb
+  line(xBD, yAB, 0, 1440, 0, 0);
+  // Line Cc
+  line(xAC, yCD, 0, 0, 900, 0);
+  // Line Dd
+  line(xBD, yCD, 0, 1440, 900, 0);
+}
+
+// If blue filter over right eye
+void drawRoomBlue(){
+  //Far wall:
+  //A--B
+  //|  |
+  //C--D
+  //Width: 1440 2D res corresponds to 290
+  //Height: 900 2D res corresponds to 175
+  //~130 in leap 3D coord corresponds to 140mm in reality
+  
+  // Camera position in pixel coords 
+  float camx = (0.3*leftMarkerPosAvg.x+0.7*rightMarkerPosAvg.x)*5.385+720;
+  float camy = (0.3*leftMarkerPosAvg.y+0.7*rightMarkerPosAvg.y)*5.385+490;
+  float camz = (0.3*leftMarkerPosAvg.z+0.7*rightMarkerPosAvg.z)*5.385;
+  
+  // Far wall distance in pixel coords
+  float d = 2000;
+  
+  float xAC = camx*d/(camz+d);
+  float xBD = 1440-((1440-camx)*d/(camz+d));
+  float yAB = camy*d/(camz+d);
+  float yCD = 900-((900-camy)*d/(camz+d));
+  
+  stroke(0,0,255);
+  strokeWeight(4);
+  // Line CD
+  line(xAC, yCD, 0, xBD, yCD, 0);
+  // Line AC
+  line(xAC, yAB, 0, xAC, yCD, 0);
+  // Line BD
+  line(xBD, yAB, 0, xBD, yCD, 0);
+  // Line AB
+  line(xAC, yAB, 0, xBD, yAB, 0);
+  
+  // Line Aa
+  line(xAC, yAB, 0, 0, 0, 0);
+  // Line Bb
+  line(xBD, yAB, 0, 1440, 0, 0);
+  // Line Cc
+  line(xAC, yCD, 0, 0, 900, 0);
+  // Line Dd
+  line(xBD, yCD, 0, 1440, 900, 0);
 }
 
 
 boolean sketchFullScreen() {
-  //return true;
-  return false;
+  return true;
+  //return false;
 }
 
 
